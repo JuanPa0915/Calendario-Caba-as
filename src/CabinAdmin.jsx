@@ -21,7 +21,8 @@
  * }
  */
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { createClient } from "@supabase/supabase-js";
 import Swal from "sweetalert2";
 import {
   Calendar, List, Settings, Home, Users, ChevronLeft, ChevronRight,
@@ -54,7 +55,10 @@ const SOURCE_CONFIG = {
 
 const MONTHS = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const DAYS_SHORT = ["Do","Lu","Ma","Mi","Ju","Vi","Sá"];
-const STORAGE_KEY = "cabanas_silvestres_reservas_v2";
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "https://taqqsiwepkiqexaimeyr.supabase.co").replace(/\/rest\/v1\/?$/, "");
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_BpHIUWG-rv6BdFmkp1zTZw_BYyA4btz";
+const SUPABASE_TABLE = "reservations";
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ─── DATOS INICIALES DE EJEMPLO ────────────────────────────────────────────────
 const SEED_DATA = [];
@@ -104,42 +108,147 @@ function hasReservationConflict(candidate, reservations) {
   });
 }
 
-// ─── HOOK: PERSISTENCIA EN LOCALSTORAGE ───────────────────────────────────────
+function rowToReservation(row) {
+  return {
+    id: row.id,
+    cabinId: row.cabin_id,
+    guestName: row.guest_name,
+    phone: row.phone || "",
+    checkIn: row.check_in,
+    checkOut: row.check_out,
+    totalPrice: Number(row.total_price || 0),
+    amountPaid: Number(row.amount_paid || 0),
+    source: row.source || "otro",
+    status: row.status || "pending",
+    notes: row.notes || "",
+    createdAt: row.created_at || new Date().toISOString(),
+  };
+}
+
+function reservationToRow(reservation) {
+  return {
+    id: reservation.id,
+    cabin_id: reservation.cabinId,
+    guest_name: reservation.guestName,
+    phone: reservation.phone || "",
+    check_in: reservation.checkIn,
+    check_out: reservation.checkOut,
+    total_price: reservation.totalPrice || 0,
+    amount_paid: reservation.amountPaid || 0,
+    source: reservation.source || "otro",
+    status: reservation.status || "pending",
+    notes: reservation.notes || "",
+    created_at: reservation.createdAt || new Date().toISOString(),
+  };
+}
+
+function sortReservations(list) {
+  return [...list].sort((a, b) => {
+    const byDate = a.checkIn.localeCompare(b.checkIn);
+    if (byDate !== 0) return byDate;
+    return (b.createdAt || "").localeCompare(a.createdAt || "");
+  });
+}
+
+// ─── HOOK: PERSISTENCIA EN SUPABASE ───────────────────────────────────────────
 
 function useReservations() {
-  const [reservations, setReservations] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? JSON.parse(saved) : SEED_DATA;
-    } catch {
-      return SEED_DATA;
-    }
-  });
+  const [reservations, setReservations] = useState(SEED_DATA);
 
-  // Guardar automáticamente cada vez que cambian las reservas
+  const fetchReservations = useCallback(async () => {
+    const { data, error } = await supabase
+      .from(SUPABASE_TABLE)
+      .select("*")
+      .order("check_in", { ascending: true });
+
+    if (error) {
+      console.error("Error cargando reservas:", error);
+      return;
+    }
+
+    setReservations(sortReservations((data || []).map(rowToReservation)));
+  }, []);
+
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(reservations));
-    } catch (e) {
-      console.error("Error guardando en localStorage:", e);
+    fetchReservations();
+
+    const channel = supabase
+      .channel("reservations-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: SUPABASE_TABLE },
+        () => fetchReservations()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchReservations]);
+
+  const addReservation = async (data) => {
+    const reservation = { ...data, id: uid(), createdAt: new Date().toISOString() };
+    const payload = reservationToRow(reservation);
+
+    const { data: inserted, error } = await supabase
+      .from(SUPABASE_TABLE)
+      .insert(payload)
+      .select("*")
+      .single();
+
+    if (error) {
+      throw error;
     }
-  }, [reservations]);
 
-  const addReservation = (data) => {
-    const newRes = { ...data, id: uid(), createdAt: new Date().toISOString() };
-    setReservations(prev => [...prev, newRes]);
-    return newRes;
+    const mapped = rowToReservation(inserted);
+    setReservations((prev) => sortReservations([...prev, mapped]));
+    return mapped;
   };
 
-  const updateReservation = (id, data) => {
-    setReservations(prev => prev.map(r => r.id === id ? { ...r, ...data } : r));
+  const updateReservation = async (id, data) => {
+    const payload = reservationToRow({ ...data, id });
+    const { data: updated, error } = await supabase
+      .from(SUPABASE_TABLE)
+      .update(payload)
+      .eq("id", id)
+      .select("*")
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    const mapped = rowToReservation(updated);
+    setReservations((prev) => sortReservations(prev.map((r) => (r.id === id ? mapped : r))));
   };
 
-  const deleteReservation = (id) => {
-    setReservations(prev => prev.filter(r => r.id !== id));
+  const deleteReservation = async (id) => {
+    const { error } = await supabase
+      .from(SUPABASE_TABLE)
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      throw error;
+    }
+
+    setReservations((prev) => prev.filter((r) => r.id !== id));
   };
 
-  return { reservations, addReservation, updateReservation, deleteReservation };
+  const clearAllReservations = async () => {
+    const { error } = await supabase
+      .from(SUPABASE_TABLE)
+      .delete()
+      .neq("id", "");
+
+    if (error) {
+      throw error;
+    }
+
+    setReservations([]);
+  };
+
+  return { reservations, addReservation, updateReservation, deleteReservation, clearAllReservations };
 }
 
 // ─── COMPONENTE: SIDEBAR ──────────────────────────────────────────────────────
@@ -207,7 +316,7 @@ function Sidebar({ activeView, onNavigate, reservations }) {
 
       {/* Footer del sidebar */}
       <div className="px-4 py-3 border-t border-zinc-800">
-        <p className="text-zinc-600 text-xs">💾 Datos en localStorage</p>
+        <p className="text-zinc-600 text-xs">☁️ Datos en Supabase</p>
       </div>
     </aside>
   );
@@ -895,7 +1004,7 @@ function SettingsView({ reservations, onClearAll }) {
       <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-5">
         <h3 className="text-white font-semibold mb-1">Persistencia de datos</h3>
         <p className="text-zinc-500 text-sm mb-4">
-          Las reservas se guardan automáticamente en <code className="text-emerald-400 bg-zinc-800 px-1.5 py-0.5 rounded text-xs">localStorage</code> de tu navegador. No se necesita servidor.
+          Las reservas se guardan automáticamente en <code className="text-emerald-400 bg-zinc-800 px-1.5 py-0.5 rounded text-xs">Supabase</code>. Todos los usuarios con acceso al sistema ven los mismos cambios.
         </p>
         <div className="flex items-center gap-2 p-3 bg-zinc-800 rounded-lg">
           <Check size={14} className="text-emerald-400 flex-shrink-0" />
@@ -943,7 +1052,7 @@ function SettingsView({ reservations, onClearAll }) {
 // ─── APP PRINCIPAL ─────────────────────────────────────────────────────────────
 
 export default function App() {
-  const { reservations, addReservation, updateReservation, deleteReservation } = useReservations();
+  const { reservations, addReservation, updateReservation, deleteReservation, clearAllReservations } = useReservations();
   const [activeView, setActiveView] = useState("calendar");
 
   // Estado del modal
@@ -977,16 +1086,44 @@ export default function App() {
       return;
     }
 
-    if (modal.mode === "edit") {
-      updateReservation(data.id, data);
-    } else {
-      addReservation(data);
+    try {
+      if (modal.mode === "edit") {
+        await updateReservation(data.id, data);
+      } else {
+        await addReservation(data);
+      }
+    } catch (error) {
+      await Swal.fire({
+        title: "Error guardando reserva",
+        text: error?.message || "No fue posible guardar la reserva en Supabase.",
+        icon: "error",
+        confirmButtonText: "Entendido",
+        background: "#18181b",
+        color: "#f4f4f5",
+        confirmButtonColor: "#2563eb",
+      });
+      return;
     }
+
     setModal(null);
   };
 
-  const handleDelete = (id) => {
-    deleteReservation(id);
+  const handleDelete = async (id) => {
+    try {
+      await deleteReservation(id);
+    } catch (error) {
+      await Swal.fire({
+        title: "Error eliminando reserva",
+        text: error?.message || "No fue posible eliminar la reserva en Supabase.",
+        icon: "error",
+        confirmButtonText: "Entendido",
+        background: "#18181b",
+        color: "#f4f4f5",
+        confirmButtonColor: "#2563eb",
+      });
+      return;
+    }
+
     setModal(null);
   };
 
@@ -1034,7 +1171,7 @@ export default function App() {
           {activeView === "settings" && (
             <SettingsView
               reservations={reservations}
-              onClearAll={() => { reservations.forEach(r => deleteReservation(r.id)); }}
+              onClearAll={clearAllReservations}
             />
           )}
         </div>
