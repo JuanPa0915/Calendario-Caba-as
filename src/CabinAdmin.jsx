@@ -355,10 +355,42 @@ function KpiCards({ reservations }) {
     return diff >= 0 && diff < 7;
   });
 
-  // Ingresos del mes
-  const monthRevenue = reservations
-    .filter(r => r.checkIn.startsWith(`${year}-${String(month+1).padStart(2,"0")}`) && r.status === "confirmed")
-    .reduce((sum, r) => sum + (r.amountPaid || 0), 0);
+  const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}`;
+  const normalizeAmount = (value) => {
+    if (typeof value === "number") return value;
+    if (value == null) return 0;
+    return parseMoneyInput(String(value));
+  };
+  const isInCurrentMonth = (dateValue) => {
+    if (!dateValue) return false;
+    const raw = String(dateValue).trim();
+    if (raw.startsWith(monthPrefix)) return true;
+
+    // Compatibilidad con formatos como DD/MM/YYYY o fechas ISO completas.
+    const dmy = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (dmy) {
+      const [, d, m, y] = dmy;
+      const normalized = `${y}-${m}-${d}`;
+      return normalized.startsWith(monthPrefix);
+    }
+
+    const parsed = new Date(raw);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.getFullYear() === year && parsed.getMonth() === month;
+    }
+
+    return false;
+  };
+
+  const monthRevenueA = reservations
+    .filter((r) => r.cabinId === "A" && r.status !== "blocked" && isInCurrentMonth(r.checkIn))
+    .reduce((sum, r) => sum + normalizeAmount(r.amountPaid), 0);
+
+  const monthRevenueB = reservations
+    .filter((r) => r.cabinId === "B" && r.status !== "blocked" && isInCurrentMonth(r.checkIn))
+    .reduce((sum, r) => sum + normalizeAmount(r.amountPaid), 0);
+
+  const monthRevenue = monthRevenueA + monthRevenueB;
 
   // Reservas pendientes de cobro
   const pendingRevenue = reservations
@@ -1010,7 +1042,7 @@ function SettingsView({ reservations, onClearAll }) {
         <div className="flex items-center gap-2 p-3 bg-zinc-800 rounded-lg">
           <Check size={14} className="text-emerald-400 flex-shrink-0" />
           <span className="text-zinc-300 text-sm">
-            {reservations.length} reserva{reservations.length !== 1 ? "s" : ""} guardada{reservations.length !== 1 ? "s" : ""}
+            {reservations.length} reserva{reservations.length !== 1 ? "s" : ""}
           </span>
         </div>
       </div>
