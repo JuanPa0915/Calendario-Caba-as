@@ -40,9 +40,9 @@ const CABINS = {
 };
 
 const STATUS_CONFIG = {
-  confirmed: { label: "Confirmada",          color: "#38bdf8", bg: "#082f49", icon: Check },
-  pending:   { label: "Pendiente de pago",   color: "#a855f7", bg: "#3b0764", icon: Clock },
-  blocked:   { label: "Mantenimiento",   color: "#ef4444", bg: "#450a0a", icon: Wrench },
+  confirmed: { label: "Pago completo",       color: "#16a34a", bg: "#052e16", icon: Check },
+  pending:   { label: "Abono",               color: "#2563eb", bg: "#172554", icon: DollarSign },
+  blocked:   { label: "Pendiente de pago",   color: "#ea580c", bg: "#431407", icon: Clock },
 };
 
 const SOURCE_CONFIG = {
@@ -91,7 +91,7 @@ function diffDays(a, b) {
   return Math.max(0, Math.round((toDate(b) - toDate(a)) / 86400000));
 }
 function isDateInReservation(dateKey, res) {
-  return dateKey >= res.checkIn && dateKey < res.checkOut;
+  return dateKey >= res.checkIn && dateKey <= res.checkOut;
 }
 function getDaysInMonth(year, month) {
   return new Date(year, month + 1, 0).getDate();
@@ -254,8 +254,8 @@ function useReservations() {
 // ─── COMPONENTE: SIDEBAR ──────────────────────────────────────────────────────
 
 function Sidebar({ activeView, onNavigate, reservations }) {
-  // Contar reservas pendientes de pago para el badge
-  const pendingCount = reservations.filter(r => r.status === "pending").length;
+  // Contar reservas que no tienen pago completo para el badge
+  const pendingCount = reservations.filter(r => r.status !== "confirmed").length;
 
   const navItems = [
     { id: "calendar", label: "Calendario", icon: Calendar },
@@ -352,7 +352,7 @@ function KpiCards({ reservations }) {
   const weekCheckins = reservations.filter(r => {
     const ci = toDate(r.checkIn);
     const diff = Math.round((ci - today) / 86400000);
-    return diff >= 0 && diff < 7 && r.status !== "blocked";
+    return diff >= 0 && diff < 7;
   });
 
   // Ingresos del mes
@@ -769,23 +769,24 @@ function MasterCalendar({ reservations, onDayClick, onReservationClick }) {
 // Chip de reserva dentro del día del calendario
 function ReservationChip({ reservation, cabin, dateKey, onClick }) {
   const isStart = reservation.checkIn === dateKey;
+  const isEnd = reservation.checkOut === dateKey;
   const StatusIcon = STATUS_CONFIG[reservation.status]?.icon || Check;
-  const isBlocked = reservation.status === "blocked";
 
   return (
     <button
       onClick={onClick}
       className="w-full text-left px-1.5 py-0.5 rounded text-xs transition-all hover:opacity-80 truncate flex items-center gap-1"
       style={{
-        background: isBlocked ? `${cabin.color}20` : `${cabin.color}25`,
+        width: isEnd ? "50%" : "100%",
+        background: `${cabin.color}25`,
         color: cabin.color,
         borderLeft: `2px solid ${cabin.color}`,
-        opacity: isBlocked ? 0.7 : 1,
+        opacity: isEnd ? 0.7 : 1,
       }}
       title={`${cabin.name} · ${reservation.guestName}`}
     >
       <span className="flex-shrink-0 opacity-70"><StatusIcon size={8} /></span>
-      <span className="truncate">{isStart ? reservation.guestName : "·"}</span>
+      <span className="truncate">{isStart ? reservation.guestName : (isEnd ? "Salida" : "·")}</span>
     </button>
   );
 }
@@ -822,9 +823,9 @@ function ReservationList({ reservations, onEdit }) {
     { id: "all", label: "Todas" },
     { id: "A", label: CABINS.A.short },
     { id: "B", label: CABINS.B.short },
-    { id: "confirmed", label: "Confirmadas" },
-    { id: "pending", label: "Pendientes" },
-    { id: "blocked", label: "Bloqueadas" },
+    { id: "confirmed", label: "Pago completo" },
+    { id: "pending", label: "Abono" },
+    { id: "blocked", label: "Pendiente de pago" },
   ];
 
   return (
@@ -879,7 +880,7 @@ function ReservationList({ reservations, onEdit }) {
             )}
             {filtered.map((r, i) => {
               const cabin = CABINS[r.cabinId];
-              const status = STATUS_CONFIG[r.status];
+              const status = STATUS_CONFIG[r.status] || STATUS_CONFIG.pending;
               const source = SOURCE_CONFIG[r.source];
               const SourceIcon = source?.icon || Tag;
               const nights = diffDays(r.checkIn, r.checkOut);
@@ -1134,15 +1135,15 @@ export default function App() {
   };
 
   return (
-    <div className="flex min-h-screen bg-zinc-950 text-white" style={{ fontFamily: "'system-ui', -apple-system, sans-serif" }}>
+    <div className="theme-light flex min-h-screen bg-white text-zinc-900" style={{ fontFamily: "'system-ui', -apple-system, sans-serif" }}>
       {/* Sidebar */}
       <Sidebar activeView={activeView} onNavigate={setActiveView} reservations={reservations} />
 
       {/* Contenido principal */}
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto bg-white">
         {/* Topbar */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-zinc-950 sticky top-0 z-10">
-          <h1 className="text-white font-semibold text-base">{VIEW_TITLES[activeView]}</h1>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 bg-white sticky top-0 z-10">
+          <h1 className="text-zinc-900 font-semibold text-base">{VIEW_TITLES[activeView]}</h1>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setModal({ mode: "create" })}

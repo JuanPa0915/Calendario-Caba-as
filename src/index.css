@@ -9,5 +9,33 @@ body,
 }
 
 body {
-  background: #09090b;
+  background: #ffffff;
+}
+
+.theme-light .bg-zinc-950,
+.theme-light .bg-zinc-900,
+.theme-light .bg-zinc-800,
+.theme-light .bg-zinc-700,
+.theme-light [class*="bg-zinc-"] {
+  background: #ffffff !important;
+}
+
+.theme-light .border-zinc-900,
+.theme-light .border-zinc-800,
+.theme-light .border-zinc-700,
+.theme-light .border-zinc-600,
+.theme-light [class*="border-zinc-"] {
+  border-color: #000000 !important;
+}
+
+.theme-light .text-white,
+.theme-light .text-zinc-600,
+.theme-light .text-zinc-500,
+.theme-light .text-zinc-400,
+.theme-light .text-zinc-300 {
+  color: #111111 !important;
+}
+
+.theme-light [class*="hover:bg-zinc-"]:hover {
+  background: #f3f4f6 !important;
 }
