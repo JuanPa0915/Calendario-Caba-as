@@ -55,8 +55,8 @@ const SOURCE_CONFIG = {
 
 const MONTHS = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const DAYS_SHORT = ["Do","Lu","Ma","Mi","Ju","Vi","Sá"];
-const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "https://taqqsiwepkiqexaimeyr.supabase.co").replace(/\/rest\/v1\/?$/, "");
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_BpHIUWG-rv6BdFmkp1zTZw_BYyA4btz";
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "https://nwcscnffgajlqxtsezeh.supabase.co").replace(/\/rest\/v1\/?$/, "");
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_RBPbM12aD03NzavEmop0Rw_9DzFcIKD";
 const SUPABASE_TABLE = "reservations";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
