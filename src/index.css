@@ -39,3 +39,23 @@ body {
 .theme-light [class*="hover:bg-zinc-"]:hover {
   background: #f3f4f6 !important;
 }
+
+@media (max-width: 767px) {
+  .grid-cols-7 > div {
+    border-right: none !important;
+  }
+
+  .fixed.inset-0.z-50 > div {
+    max-width: 100% !important;
+    border-radius: 0 !important;
+  }
+
+  table {
+    font-size: 11px;
+  }
+
+  table th,
+  table td {
+    padding: 8px 6px !important;
+  }
+}

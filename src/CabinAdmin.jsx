@@ -253,7 +253,7 @@ function useReservations() {
 
 // ─── COMPONENTE: SIDEBAR ──────────────────────────────────────────────────────
 
-function Sidebar({ activeView, onNavigate, reservations }) {
+function Sidebar({ activeView, onNavigate, reservations, isOpen, onClose }) {
   // Contar reservas que no tienen pago completo para el badge
   const pendingCount = reservations.filter(r => r.status !== "confirmed").length;
 
@@ -264,61 +264,87 @@ function Sidebar({ activeView, onNavigate, reservations }) {
   ];
 
   return (
-    <aside className="w-56 min-h-screen flex flex-col border-r border-zinc-800 bg-zinc-950">
-      {/* Logo */}
-      <div className="px-5 py-5 border-b border-zinc-800">
-        <div className="flex items-center gap-2.5 mb-0.5">
-          <div className="w-7 h-7 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-            <Home size={14} className="text-emerald-400" />
-          </div>
-          <span className="text-white font-semibold text-sm tracking-wide">Cabañas Admin</span>
-        </div>
-        <p className="text-zinc-600 text-xs pl-9">Panel de control</p>
-      </div>
-
-      {/* Indicadores de cabañas */}
-      <div className="px-4 py-3 border-b border-zinc-800 space-y-1.5">
-        {Object.values(CABINS).map(c => (
-          <div key={c.id} className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: c.color }} />
-            <span className="text-zinc-400 text-xs truncate">{c.name}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Navegación */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
-        {navItems.map(({ id, label, icon: Icon, badge }) => {
-          const isActive = activeView === id;
-          return (
-            <button
-              key={id}
-              onClick={() => onNavigate(id)}
-              className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-all duration-150 group"
-              style={{
-                background: isActive ? "#18181b" : "transparent",
-                color: isActive ? "#fff" : "#71717a",
-              }}
-            >
-              <div className="flex items-center gap-2.5">
-                <Icon size={15} style={{ color: isActive ? "#22c55e" : "#52525b" }} />
-                <span>{label}</span>
+    <>
+      {/* Overlay para móvil */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={onClose}
+        />
+      )}
+      
+      {/* Sidebar */}
+      <aside className={`
+        fixed md:static inset-y-0 left-0 z-50
+        w-64 md:w-56 min-h-screen flex flex-col 
+        border-r border-zinc-800 bg-zinc-950
+        transform transition-transform duration-200 ease-in-out
+        ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+      `}>
+        {/* Logo */}
+        <div className="px-5 py-5 border-b border-zinc-800">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5 mb-0.5">
+              <div className="w-7 h-7 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                <Home size={14} className="text-emerald-400" />
               </div>
-              {badge > 0 && (
-                <span className="bg-amber-500 text-black text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
-                  {badge}
-                </span>
-              )}
+              <span className="text-white font-semibold text-sm tracking-wide">Cabañas Admin</span>
+            </div>
+            {/* Botón cerrar en móvil */}
+            <button onClick={onClose} className="md:hidden text-zinc-400 hover:text-white p-1">
+              <X size={18} />
             </button>
-          );
-        })}
-      </nav>
+          </div>
+          <p className="text-zinc-600 text-xs pl-9">Panel de control</p>
+        </div>
 
-      {/* Footer del sidebar */}
-      <div className="px-4 py-3 border-t border-zinc-800">
-        <p className="text-zinc-600 text-xs">☁️ Datos en Supabase</p>
-      </div>
-    </aside>
+        {/* Indicadores de cabañas */}
+        <div className="px-4 py-3 border-b border-zinc-800 space-y-1.5">
+          {Object.values(CABINS).map(c => (
+            <div key={c.id} className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: c.color }} />
+              <span className="text-zinc-400 text-xs truncate">{c.name}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Navegación */}
+        <nav className="flex-1 px-3 py-4 space-y-1">
+          {navItems.map(({ id, label, icon: Icon, badge }) => {
+            const isActive = activeView === id;
+            return (
+              <button
+                key={id}
+                onClick={() => {
+                  onNavigate(id);
+                  onClose();
+                }}
+                className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-all duration-150 group"
+                style={{
+                  background: isActive ? "#18181b" : "transparent",
+                  color: isActive ? "#fff" : "#71717a",
+                }}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Icon size={15} style={{ color: isActive ? "#22c55e" : "#52525b" }} />
+                  <span>{label}</span>
+                </div>
+                {badge > 0 && (
+                  <span className="bg-amber-500 text-black text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                    {badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Footer del sidebar */}
+        <div className="px-4 py-3 border-t border-zinc-800">
+          <p className="text-zinc-600 text-xs">☁️ Datos en Supabase</p>
+        </div>
+      </aside>
+    </>
   );
 }
 
@@ -431,21 +457,21 @@ function KpiCards({ reservations }) {
   ];
 
   return (
-    <div className="grid grid-cols-4 gap-4 mb-6">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4 md:mb-6">
       {kpis.map((kpi, i) => {
         const Icon = kpi.icon;
         return (
-          <div key={i} className="bg-zinc-900 rounded-xl p-4 border border-zinc-800">
-            <div className="flex items-start justify-between mb-3">
-              <p className="text-zinc-400 text-xs leading-snug">{kpi.label}</p>
-              <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${kpi.color}20` }}>
-                <Icon size={13} style={{ color: kpi.color }} />
+          <div key={i} className="bg-zinc-900 rounded-xl p-3 md:p-4 border border-zinc-800">
+            <div className="flex items-start justify-between mb-2 md:mb-3">
+              <p className="text-zinc-400 text-[10px] md:text-xs leading-snug">{kpi.label}</p>
+              <div className="w-6 h-6 md:w-7 md:h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${kpi.color}20` }}>
+                <Icon size={11} style={{ color: kpi.color }} />
               </div>
             </div>
-            <p className="text-white font-bold text-xl mb-1">{kpi.value}</p>
-            <p className="text-zinc-600 text-xs">{kpi.sub}</p>
+            <p className="text-white font-bold text-lg md:text-xl mb-0.5 md:mb-1">{kpi.value}</p>
+            <p className="text-zinc-600 text-[10px] md:text-xs">{kpi.sub}</p>
             {kpi.bar !== undefined && (
-              <div className="mt-2 h-1 bg-zinc-800 rounded-full overflow-hidden">
+              <div className="mt-1.5 md:mt-2 h-1 bg-zinc-800 rounded-full overflow-hidden">
                 <div className="h-full rounded-full transition-all duration-700" style={{ width: `${kpi.bar}%`, background: kpi.color }} />
               </div>
             )}
@@ -682,9 +708,9 @@ function MasterCalendar({ reservations, onDayClick, onReservationClick }) {
   return (
     <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
       {/* Header del calendario */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
+      <div className="flex items-center justify-between px-3 py-3 md:px-5 md:py-4 border-b border-zinc-800">
         <div className="flex items-center gap-3">
-          <h3 className="text-white font-semibold">
+          <h3 className="text-white font-semibold text-base md:text-lg">
             {MONTHS[month]} <span className="text-zinc-500">{year}</span>
           </h3>
           <button onClick={goToday} className="text-xs text-zinc-500 hover:text-white border border-zinc-700 hover:border-zinc-500 px-2 py-0.5 rounded transition">
@@ -701,8 +727,8 @@ function MasterCalendar({ reservations, onDayClick, onReservationClick }) {
         </div>
       </div>
 
-      {/* Leyenda */}
-      <div className="flex items-center gap-4 px-5 py-2 border-b border-zinc-800 bg-zinc-950">
+      {/* Leyenda - Oculta en móvil */}
+      <div className="hidden md:flex items-center gap-4 px-5 py-2 border-b border-zinc-800 bg-zinc-950">
         {Object.values(CABINS).map(c => (
           <div key={c.id} className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: c.color }} />
@@ -719,17 +745,27 @@ function MasterCalendar({ reservations, onDayClick, onReservationClick }) {
         </div>
       </div>
 
+      {/* Leyenda móvil - Compacta */}
+      <div className="flex md:hidden items-center justify-center gap-4 px-3 py-2 border-b border-zinc-800 bg-zinc-950">
+        {Object.values(CABINS).map(c => (
+          <div key={c.id} className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: c.color }} />
+            <span className="text-[10px] text-zinc-500">{c.short}</span>
+          </div>
+        ))}
+      </div>
+
       {/* Nombres de días */}
       <div className="grid grid-cols-7 border-b border-zinc-800">
         {DAYS_SHORT.map(d => (
-          <div key={d} className="text-center text-xs font-medium text-zinc-600 py-2">{d}</div>
+          <div key={d} className="text-center text-[10px] md:text-xs font-medium text-zinc-600 py-1.5 md:py-2">{d}</div>
         ))}
       </div>
 
       {/* Cuadrícula de días */}
       <div className="grid grid-cols-7">
         {cells.map((day, idx) => {
-          if (!day) return <div key={`empty-${idx}`} className="border-b border-r border-zinc-800/50 min-h-[90px]" />;
+          if (!day) return <div key={`empty-${idx}`} className="border-b border-r border-zinc-800/50 min-h-[50px] md:min-h-[90px]" />;
 
           const date = new Date(year, month, day);
           const key = toKey(date);
@@ -744,26 +780,27 @@ function MasterCalendar({ reservations, onDayClick, onReservationClick }) {
             <div
               key={day}
               onClick={() => onDayClick(key)}
-              className="border-b border-r border-zinc-800/50 min-h-[90px] p-1.5 cursor-pointer hover:bg-zinc-800/40 transition-colors group relative"
-              style={{ background: isToday ? "rgba(34,197,94,0.05)" : undefined }}
+              className="border-b border-r border-zinc-800/50 min-h-[50px] md:min-h-[90px] p-1 md:p-1.5 cursor-pointer hover:bg-zinc-800/40 transition-colors group relative"
+              style={{ background: isToday ? "rgba(239,68,68,0.08)" : undefined }}
             >
-              {/* Número del día */}
-              <div className="flex items-center justify-between mb-1.5">
+              {/* Número del día - Estilo Apple Calendar */}
+              <div className="flex items-center justify-center md:justify-between mb-1">
                 <span
-                  className="text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full transition"
+                  className="text-xs md:text-sm font-medium w-6 h-6 md:w-7 md:h-7 flex items-center justify-center rounded-full transition"
                   style={{
-                    color: isToday ? "#000" : isPast ? "#3f3f46" : "#a1a1aa",
-                    background: isToday ? "#22c55e" : "transparent",
+                    color: isToday ? "#fff" : isPast ? "#3f3f46" : "#d4d4d8",
+                    background: isToday ? "#ef4444" : "transparent",
+                    fontWeight: isToday ? "600" : "500",
                   }}
                 >
                   {day}
                 </span>
-                {/* Botón añadir (visible en hover) */}
-                <Plus size={11} className="text-zinc-700 opacity-0 group-hover:opacity-100 transition" />
+                {/* Botón añadir (visible en hover solo desktop) */}
+                <Plus size={11} className="text-zinc-700 opacity-0 group-hover:opacity-100 transition hidden md:block" />
               </div>
 
-              {/* Indicadores de reservas */}
-              <div className="space-y-1">
+              {/* Indicadores de reservas - Desktop: texto, Móvil: puntos */}
+              <div className="hidden md:block space-y-1">
                 {resA.map(r => (
                   <ReservationChip
                     key={r.id}
@@ -788,6 +825,22 @@ function MasterCalendar({ reservations, onDayClick, onReservationClick }) {
                     <span className="w-1.5 h-1.5 rounded-full" style={{ background: CABINS.A.color + "60" }} />
                     <span className="w-1.5 h-1.5 rounded-full" style={{ background: CABINS.B.color + "60" }} />
                   </div>
+                )}
+              </div>
+
+              {/* Indicadores de reservas - Móvil: puntos de colores */}
+              <div className="flex md:hidden items-center justify-center gap-0.5 mt-0.5">
+                {resA.length > 0 && (
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: CABINS.A.color }} />
+                )}
+                {resB.length > 0 && (
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: CABINS.B.color }} />
+                )}
+                {resA.length === 0 && resB.length === 0 && !isPast && (
+                  <>
+                    <span className="w-1 h-1 rounded-full" style={{ background: CABINS.A.color + "30" }} />
+                    <span className="w-1 h-1 rounded-full" style={{ background: CABINS.B.color + "30" }} />
+                  </>
                 )}
               </div>
             </div>
@@ -1087,6 +1140,7 @@ function SettingsView({ reservations, onClearAll }) {
 export default function App() {
   const { reservations, addReservation, updateReservation, deleteReservation, clearAllReservations } = useReservations();
   const [activeView, setActiveView] = useState("calendar");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Estado del modal
   const [modal, setModal] = useState(null);
@@ -1169,25 +1223,40 @@ export default function App() {
   return (
     <div className="theme-light flex min-h-screen bg-white text-zinc-900" style={{ fontFamily: "'system-ui', -apple-system, sans-serif" }}>
       {/* Sidebar */}
-      <Sidebar activeView={activeView} onNavigate={setActiveView} reservations={reservations} />
+      <Sidebar 
+        activeView={activeView} 
+        onNavigate={setActiveView} 
+        reservations={reservations}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
 
       {/* Contenido principal */}
       <main className="flex-1 overflow-auto bg-white">
         {/* Topbar */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 bg-white sticky top-0 z-10">
-          <h1 className="text-zinc-900 font-semibold text-base">{VIEW_TITLES[activeView]}</h1>
+        <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-b border-zinc-200 bg-white sticky top-0 z-10">
+          <div className="flex items-center gap-3">
+            {/* Botón hamburguesa en móvil */}
+            <button 
+              onClick={() => setSidebarOpen(true)}
+              className="md:hidden p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-600"
+            >
+              <List size={20} />
+            </button>
+            <h1 className="text-zinc-900 font-semibold text-sm md:text-base">{VIEW_TITLES[activeView]}</h1>
+          </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setModal({ mode: "create" })}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium transition"
+              className="flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-1.5 md:py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs md:text-sm font-medium transition"
             >
-              <Plus size={14} /> Nueva reserva
+              <Plus size={12} /> <span className="hidden sm:inline">Nueva reserva</span>
             </button>
           </div>
         </div>
 
         {/* Vistas */}
-        <div className="p-6">
+        <div className="p-3 md:p-6">
           {activeView === "calendar" && (
             <>
               <KpiCards reservations={reservations} />
