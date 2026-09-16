@@ -1,8 +1,6 @@
 @import "tailwindcss";
 
-html,
-body,
-#root {
+html, body, #root {
   width: 100%;
   min-height: 100%;
   margin: 0;
@@ -12,50 +10,42 @@ body {
   background: #ffffff;
 }
 
-.theme-light .bg-zinc-950,
-.theme-light .bg-zinc-900,
-.theme-light .bg-zinc-800,
-.theme-light .bg-zinc-700,
-.theme-light [class*="bg-zinc-"] {
+/* ─── THEME-LIGHT: solo aplica al contenido principal, NUNCA al sidebar ni al modal ─── */
+.theme-light main [class*="bg-zinc-"] {
   background: #ffffff !important;
 }
-
-.theme-light .border-zinc-900,
-.theme-light .border-zinc-800,
-.theme-light .border-zinc-700,
-.theme-light .border-zinc-600,
-.theme-light [class*="border-zinc-"] {
-  border-color: #000000 !important;
+.theme-light main [class*="border-zinc-"] {
+  border-color: #e5e7eb !important;
 }
-
-.theme-light .text-white,
-.theme-light .text-zinc-600,
-.theme-light .text-zinc-500,
-.theme-light .text-zinc-400,
-.theme-light .text-zinc-300 {
+.theme-light main [class*="text-white"] {
   color: #111111 !important;
 }
-
-.theme-light [class*="hover:bg-zinc-"]:hover {
+.theme-light main [class*="text-zinc-400"],
+.theme-light main [class*="text-zinc-500"],
+.theme-light main [class*="text-zinc-600"] {
+  color: #71717a !important;
+}
+.theme-light main [class*="hover:bg-zinc-"]:hover {
   background: #f3f4f6 !important;
 }
 
+/* ─── MÓVIL: celdas del calendario sin bordes verticales ─── */
 @media (max-width: 767px) {
-  .grid-cols-7 > div {
+  /* Quitar bordes verticales de la grid del calendario */
+  .calendar-grid > div {
     border-right: none !important;
   }
-
-  .fixed.inset-0.z-50 > div {
-    max-width: 100% !important;
-    border-radius: 0 !important;
+  /* Quitar borde inferior de las celdas vacías */
+  .calendar-grid > div.border-b {
+    border-bottom-color: transparent !important;
   }
 
-  table {
-    font-size: 11px;
-  }
+  /* Tabla de reservas más compacta */
+  table { font-size: 11px; }
+  table th, table td { padding: 6px 4px !important; }
+}
 
-  table th,
-  table td {
-    padding: 8px 6px !important;
-  }
+/* ─── SIDEBAR DRAWER: transición suave ─── */
+.sidebar-drawer {
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
