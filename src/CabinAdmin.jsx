@@ -16,8 +16,9 @@ import {
 // ─── CONSTANTES ────────────────────────────────────────────────────────────────
 
 const CABINS = {
-  A: { id: "A", name: "Cabaña Blanca",  color: "#22c55e", short: "CB" },
-  B: { id: "B", name: "Cabaña De Madera", color: "#f59e0b", short: "CM" },
+  A:  { id: "A",  name: "Cabaña Blanca",    color: "#22c55e", short: "CB" },
+  B:  { id: "B",  name: "Cabaña De Madera",  color: "#f59e0b", short: "CM" },
+  AB: { id: "AB", name: "Ambas Cabañas",     color: "#8b5cf6", short: "AC" },
 };
 
 const STATUS_CONFIG = {
@@ -91,7 +92,10 @@ function getFirstDayOfMonth(year, month) {
 function hasReservationConflict(candidate, reservations) {
   return reservations.find((r) => {
     if (r.id === candidate.id) return false;
-    if (r.cabinId !== candidate.cabinId) return false;
+    const candidateCabins = candidate.cabinId === "AB" ? ["A", "B"] : [candidate.cabinId];
+    const existingCabins = r.cabinId === "AB" ? ["A", "B"] : [r.cabinId];
+    const sharesCabin = candidateCabins.some(c => existingCabins.includes(c));
+    if (!sharesCabin) return false;
     return candidate.checkIn < r.checkOut && r.checkIn < candidate.checkOut;
   });
 }
@@ -324,9 +328,12 @@ function KpiCards({ reservations }) {
     let occupied = new Set();
     for (let d = 1; d <= daysInMonth; d++) {
       const key = toKey(new Date(year, month, d));
-      if (reservations.some(r => r.cabinId === cabinId && r.status !== "blocked" && isDateInReservation(key, r))) {
-        occupied.add(key);
-      }
+      const hasRes = reservations.some(r => {
+        if (r.status === "blocked") return false;
+        if (!isDateInReservation(key, r)) return false;
+        return r.cabinId === cabinId || r.cabinId === "AB";
+      });
+      if (hasRes) occupied.add(key);
     }
     return occupied.size;
   }
@@ -651,7 +658,8 @@ function MasterCalendar({ reservations, onDayClick, onReservationClick }) {
 
           const resA = reservations.filter(r => r.cabinId === "A" && isDateInReservation(key, r));
           const resB = reservations.filter(r => r.cabinId === "B" && isDateInReservation(key, r));
-          const hasAnyReservation = resA.length > 0 || resB.length > 0;
+          const resAB = reservations.filter(r => r.cabinId === "AB" && isDateInReservation(key, r));
+          const hasAnyReservation = resA.length > 0 || resB.length > 0 || resAB.length > 0;
 
           return (
             <div
@@ -675,6 +683,9 @@ function MasterCalendar({ reservations, onDayClick, onReservationClick }) {
 
               {/* Desktop: chips de texto */}
               <div className="hidden md:block space-y-0.5">
+                {resAB.map(r => (
+                  <ReservationChip key={r.id} reservation={r} cabin={CABINS.AB} dateKey={key} onClick={(e) => { e.stopPropagation(); onReservationClick(r); }} />
+                ))}
                 {resA.map(r => (
                   <ReservationChip key={r.id} reservation={r} cabin={CABINS.A} dateKey={key} onClick={(e) => { e.stopPropagation(); onReservationClick(r); }} />
                 ))}
@@ -686,8 +697,9 @@ function MasterCalendar({ reservations, onDayClick, onReservationClick }) {
               {/* Móvil: dots de color */}
               {hasAnyReservation && (
                 <div className="flex md:hidden items-center justify-center gap-[3px] mt-0.5">
-                  {resA.length > 0 && <span className="w-[5px] h-[5px] rounded-full" style={{ background: CABINS.A.color }} />}
-                  {resB.length > 0 && <span className="w-[5px] h-[5px] rounded-full" style={{ background: CABINS.B.color }} />}
+                  {resAB.length > 0 && <span className="w-[5px] h-[5px] rounded-full" style={{ background: CABINS.AB.color }} />}
+                  {resAB.length === 0 && resA.length > 0 && <span className="w-[5px] h-[5px] rounded-full" style={{ background: CABINS.A.color }} />}
+                  {resAB.length === 0 && resB.length > 0 && <span className="w-[5px] h-[5px] rounded-full" style={{ background: CABINS.B.color }} />}
                 </div>
               )}
             </div>
@@ -728,27 +740,36 @@ function ReservationChip({ reservation, cabin, dateKey, onClick }) {
 function ReservationList({ reservations, onEdit }) {
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [mostrarHistorial, setMostrarHistorial] = useState(false);
   const today = toKey(new Date());
 
   const filtered = useMemo(() => {
     return reservations
       .filter(r => {
-        if (filter === "A" || filter === "B") return r.cabinId === filter;
+        if (!mostrarHistorial && r.checkOut < today) return false;
+        return true;
+      })
+      .filter(r => {
+        if (filter === "A" || filter === "B" || filter === "AB") return r.cabinId === filter;
         if (["pending","confirmed","blocked"].includes(filter)) return r.status === filter;
         return true;
       })
       .filter(r => !search || r.guestName.toLowerCase().includes(search.toLowerCase()) || r.phone.includes(search))
       .sort((a, b) => a.checkIn.localeCompare(b.checkIn));
-  }, [reservations, filter, search]);
+  }, [reservations, filter, search, mostrarHistorial, today]);
 
   const filterButtons = [
     { id: "all", label: "Todas" },
     { id: "A", label: CABINS.A.short },
     { id: "B", label: CABINS.B.short },
+    { id: "AB", label: CABINS.AB.short },
     { id: "confirmed", label: "Pago" },
     { id: "pending", label: "Abono" },
     { id: "blocked", label: "Pendiente" },
   ];
+
+  const activeCount = useMemo(() => reservations.filter(r => r.checkOut >= today).length, [reservations, today]);
+  const totalCount = reservations.length;
 
   return (
     <div>
@@ -776,6 +797,35 @@ function ReservationList({ reservations, onEdit }) {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Toggle: Activas vs Historial */}
+      <div className="flex items-center justify-between mb-4 p-3 bg-zinc-50 rounded-xl border border-zinc-200">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setMostrarHistorial(false)}
+            className="text-xs md:text-sm font-medium transition-colors px-3 py-1.5 rounded-lg"
+            style={{
+              background: !mostrarHistorial ? "#18181b" : "transparent",
+              color: !mostrarHistorial ? "#fff" : "#71717a",
+            }}
+          >
+            Activas ({activeCount})
+          </button>
+          <button
+            onClick={() => setMostrarHistorial(true)}
+            className="text-xs md:text-sm font-medium transition-colors px-3 py-1.5 rounded-lg"
+            style={{
+              background: mostrarHistorial ? "#18181b" : "transparent",
+              color: mostrarHistorial ? "#fff" : "#71717a",
+            }}
+          >
+            Historial ({totalCount})
+          </button>
+        </div>
+        <span className="text-[10px] md:text-xs text-zinc-400">
+          {mostrarHistorial ? "Mostrando todas" : `Solo activas · ${filtered.length} resultado${filtered.length !== 1 ? "s" : ""}`}
+        </span>
       </div>
 
       {/* Tarjetas en móvil, tabla en desktop */}
@@ -966,9 +1016,11 @@ export default function App() {
   const handleSave = async (data) => {
     const conflict = hasReservationConflict(data, reservations);
     if (conflict) {
+      const conflictCabinName = CABINS[conflict.cabinId]?.name || "la cabaña";
+      const candidateCabinName = CABINS[data.cabinId]?.name || "la cabaña";
       await Swal.fire({
         title: "Conflicto de reserva",
-        text: `${CABINS[data.cabinId]?.name} ya está ocupada entre ${conflict.checkIn} y ${conflict.checkOut}.`,
+        text: `${candidateCabinName} se cruza con una reserva existente de ${conflictCabinName} (${conflict.guestName}) entre ${conflict.checkIn} y ${conflict.checkOut}.`,
         icon: "error", confirmButtonText: "Entendido", confirmButtonColor: "#2563eb",
       });
       return;
