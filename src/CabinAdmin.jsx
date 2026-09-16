@@ -39,7 +39,17 @@ const DAYS_SHORT = ["Do","Lu","Ma","Mi","Ju","Vi","Sá"];
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || "https://nwcscnffgajlqxtsezeh.supabase.co").replace(/\/rest\/v1\/?$/, "");
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_RBPbM12aD03NzavEmop0Rw_9DzFcIKD";
 const SUPABASE_TABLE = "reservations";
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.error("[Supabase] Faltan variables de entorno: VITE_SUPABASE_URL y/o VITE_SUPABASE_ANON_KEY");
+}
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Diagnóstico inicial: verificar que el cliente está configurado
+console.log("[Supabase] URL:", SUPABASE_URL);
+console.log("[Supabase] Key prefix:", SUPABASE_ANON_KEY?.substring(0, 12) + "...");
+console.log("[Supabase] Table:", SUPABASE_TABLE);
 
 const SEED_DATA = [];
 
@@ -103,6 +113,20 @@ function reservationToRow(reservation) {
     notes: reservation.notes || "", created_at: reservation.createdAt || new Date().toISOString(),
   };
 }
+function formatSupabaseError(error, context = "") {
+  if (!error) return "Error desconocido";
+  const parts = [];
+  if (context) parts.push(`[${context}]`);
+  if (error.message) parts.push(error.message);
+  if (error.code) parts.push(`Código: ${error.code}`);
+  if (error.details) parts.push(`Detalles: ${error.details}`);
+  if (error.hint) parts.push(`Sugerencia: ${error.hint}`);
+  if (error.status) parts.push(`HTTP ${error.status}`);
+  const msg = parts.join(" | ");
+  console.error("[Supabase Error]", msg, error);
+  return msg;
+}
+
 function sortReservations(list) {
   return [...list].sort((a, b) => {
     const byDate = a.checkIn.localeCompare(b.checkIn);
@@ -119,7 +143,10 @@ function useReservations() {
   const fetchReservations = useCallback(async () => {
     const { data, error } = await supabase
       .from(SUPABASE_TABLE).select("*").order("check_in", { ascending: true });
-    if (error) { console.error("Error cargando reservas:", error); return; }
+    if (error) {
+      formatSupabaseError(error, "fetchReservations");
+      return;
+    }
     setReservations(sortReservations((data || []).map(rowToReservation)));
   }, []);
 
@@ -134,29 +161,58 @@ function useReservations() {
 
   const addReservation = async (data) => {
     const reservation = { ...data, id: uid(), createdAt: new Date().toISOString() };
-    const { data: inserted, error } = await supabase.from(SUPABASE_TABLE).insert(reservationToRow(reservation)).select("*").single();
-    if (error) throw error;
+    const row = reservationToRow(reservation);
+    const { data: inserted, error } = await supabase
+      .from(SUPABASE_TABLE)
+      .insert(row)
+      .select("*")
+      .single();
+    if (error) {
+      const msg = formatSupabaseError(error, "addReservation");
+      throw new Error(msg);
+    }
     const mapped = rowToReservation(inserted);
     setReservations((prev) => sortReservations([...prev, mapped]));
     return mapped;
   };
 
   const updateReservation = async (id, data) => {
-    const { data: updated, error } = await supabase.from(SUPABASE_TABLE).update(reservationToRow({ ...data, id })).eq("id", id).select("*").single();
-    if (error) throw error;
+    const row = reservationToRow({ ...data, id });
+    const { data: updated, error } = await supabase
+      .from(SUPABASE_TABLE)
+      .update(row)
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) {
+      const msg = formatSupabaseError(error, "updateReservation");
+      throw new Error(msg);
+    }
     const mapped = rowToReservation(updated);
     setReservations((prev) => sortReservations(prev.map((r) => (r.id === id ? mapped : r))));
   };
 
   const deleteReservation = async (id) => {
-    const { error } = await supabase.from(SUPABASE_TABLE).delete().eq("id", id);
-    if (error) throw error;
+    const { error } = await supabase
+      .from(SUPABASE_TABLE)
+      .delete()
+      .eq("id", id);
+    if (error) {
+      const msg = formatSupabaseError(error, "deleteReservation");
+      throw new Error(msg);
+    }
     setReservations((prev) => prev.filter((r) => r.id !== id));
   };
 
   const clearAllReservations = async () => {
-    const { error } = await supabase.from(SUPABASE_TABLE).delete().neq("id", "");
-    if (error) throw error;
+    const { error } = await supabase
+      .from(SUPABASE_TABLE)
+      .delete()
+      .neq("id", "");
+    if (error) {
+      const msg = formatSupabaseError(error, "clearAllReservations");
+      throw new Error(msg);
+    }
     setReservations([]);
   };
 
@@ -921,15 +977,35 @@ export default function App() {
       if (modal.mode === "edit") await updateReservation(data.id, data);
       else await addReservation(data);
     } catch (error) {
-      await Swal.fire({ title: "Error", text: error?.message || "Error al guardar.", icon: "error", confirmButtonText: "OK" });
+      const detail = error?.message || "Error desconocido al guardar.";
+      console.error("[handleSave]", detail, error);
+      await Swal.fire({
+        title: "Error al guardar",
+        html: `<div style="text-align:left;font-size:13px;word-break:break-word;">${detail.replace(/\|/g, "<br>")}</div>`,
+        icon: "error",
+        confirmButtonText: "Entendido",
+        confirmButtonColor: "#2563eb",
+      });
       return;
     }
     setModal(null);
   };
 
   const handleDelete = async (id) => {
-    try { await deleteReservation(id); }
-    catch (error) { await Swal.fire({ title: "Error", text: error?.message || "Error al eliminar.", icon: "error", confirmButtonText: "OK" }); return; }
+    try {
+      await deleteReservation(id);
+    } catch (error) {
+      const detail = error?.message || "Error desconocido al eliminar.";
+      console.error("[handleDelete]", detail, error);
+      await Swal.fire({
+        title: "Error al eliminar",
+        html: `<div style="text-align:left;font-size:13px;word-break:break-word;">${detail.replace(/\|/g, "<br>")}</div>`,
+        icon: "error",
+        confirmButtonText: "Entendido",
+        confirmButtonColor: "#2563eb",
+      });
+      return;
+    }
     setModal(null);
   };
 
