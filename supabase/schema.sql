@@ -12,6 +12,8 @@ create table if not exists public.reservations (
     check (source in ('whatsapp', 'instagram', 'airbnb', 'directo', 'otro')),
   status text not null default 'confirmed'
     check (status in ('confirmed', 'pending', 'blocked')),
+  adults integer check (adults is null or adults >= 0),
+  children integer check (children is null or children >= 0),
   notes text not null default '',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),

@@ -106,15 +106,18 @@ function rowToReservation(row) {
     phone: row.phone || "", checkIn: row.check_in, checkOut: row.check_out,
     totalPrice: Number(row.total_price || 0), amountPaid: Number(row.amount_paid || 0),
     source: row.source || "otro", status: row.status || "pending",
+    adults: row.adults ?? "", children: row.children ?? "",
     notes: row.notes || "", createdAt: row.created_at || new Date().toISOString(),
   };
 }
 function reservationToRow(reservation) {
+  const optionalCount = (v) => (v === "" || v === null || v === undefined ? null : Number(v));
   return {
     id: reservation.id, cabin_id: reservation.cabinId, guest_name: reservation.guestName,
     phone: reservation.phone || "", check_in: reservation.checkIn, check_out: reservation.checkOut,
     total_price: reservation.totalPrice || 0, amount_paid: reservation.amountPaid || 0,
     source: reservation.source || "otro", status: reservation.status || "pending",
+    adults: optionalCount(reservation.adults), children: optionalCount(reservation.children),
     notes: reservation.notes || "", created_at: reservation.createdAt || new Date().toISOString(),
   };
 }
@@ -330,7 +333,6 @@ function KpiCards({ reservations }) {
     for (let d = 1; d <= daysInMonth; d++) {
       const key = toKey(new Date(year, month, d));
       const hasRes = reservations.some(r => {
-        if (r.status === "blocked") return false;
         if (!isDateInReservation(key, r)) return false;
         return r.cabinId === cabinId || r.cabinId === "AB";
       });
@@ -360,16 +362,16 @@ function KpiCards({ reservations }) {
   };
 
   const monthRevenue = reservations
-    .filter(r => r.status !== "blocked" && isInCurrentMonth(r.checkIn))
+    .filter(r => isInCurrentMonth(r.checkIn))
     .reduce((sum, r) => sum + normalizeAmount(r.amountPaid), 0);
 
+  // Saldo pendiente: lo que falta por cobrar en cualquier reserva (no depende del estado).
   const pendingRevenue = reservations
-    .filter(r => r.status === "pending")
-    .reduce((sum, r) => sum + ((r.totalPrice || 0) - (r.amountPaid || 0)), 0);
+    .reduce((sum, r) => sum + Math.max(0, normalizeAmount(r.totalPrice) - normalizeAmount(r.amountPaid)), 0);
 
   const kpis = [
-    { label: `Ocupación ${CABINS.A.name.split(" ")[0]}`, value: `${occA}%`, sub: MONTHS[month], color: CABINS.A.color, icon: BarChart2, bar: occA },
-    { label: `Ocupación ${CABINS.B.name.split(" ")[0]}`, value: `${occB}%`, sub: MONTHS[month], color: CABINS.B.color, icon: BarChart2, bar: occB },
+    { label: `Ocupación ${CABINS.A.name}`, value: `${occA}%`, sub: MONTHS[month], color: CABINS.A.color, icon: BarChart2, bar: occA },
+    { label: `Ocupación ${CABINS.B.name}`, value: `${occB}%`, sub: MONTHS[month], color: CABINS.B.color, icon: BarChart2, bar: occB },
     { label: "Check-ins próximos", value: weekCheckins.length, sub: "Esta semana", color: "#60a5fa", icon: LogIn },
     { label: "Cobrado este mes", value: formatCOP(monthRevenue), sub: `${formatCOP(pendingRevenue)} pendiente`, color: "#a78bfa", icon: DollarSign },
   ];
@@ -413,7 +415,8 @@ function ReservationModal({ mode, reservation, defaultDate, defaultCabin, onSave
     return {
       cabinId: defaultCabin || "A", guestName: "", phone: "",
       checkIn: defaultDate || today, checkOut: "",
-      totalPrice: "", amountPaid: "", source: "whatsapp", status: "confirmed", notes: "",
+      totalPrice: "", amountPaid: "", adults: "", children: "",
+      source: "whatsapp", status: "confirmed", notes: "",
     };
   });
 
@@ -425,9 +428,11 @@ function ReservationModal({ mode, reservation, defaultDate, defaultCabin, onSave
   const nights = form.checkIn && form.checkOut ? diffDays(form.checkIn, form.checkOut) : 0;
   const pending = totalPriceValue - amountPaidValue;
   const hasCheckedOut = form.checkOut && form.checkOut < today;
+  const abonoExceedsTotal = amountPaidValue > totalPriceValue;
 
   const handleSave = () => {
     if (!form.guestName || !form.checkIn || !form.checkOut) return;
+    if (abonoExceedsTotal) return;
     onSave({ ...form, totalPrice: totalPriceValue, amountPaid: amountPaidValue });
   };
 
@@ -498,8 +503,23 @@ function ReservationModal({ mode, reservation, defaultDate, defaultCabin, onSave
               <input type="text" inputMode="numeric" value={form.totalPrice} onChange={setMoney("totalPrice")} placeholder="660.000" className={inputClass} />
             </div>
             <div>
-              <label className={labelClass}>Abono recibido (COP)</label>
-              <input type="text" inputMode="numeric" value={form.amountPaid} onChange={setMoney("amountPaid")} placeholder="330.000" className={inputClass} />
+              <label className={labelClass}>Abono recibido (COP) <span className="text-zinc-400">· opcional</span></label>
+              <input type="text" inputMode="numeric" value={form.amountPaid} onChange={setMoney("amountPaid")} placeholder="0" className={inputClass} />
+            </div>
+          </div>
+
+          {abonoExceedsTotal && (
+            <p className="text-xs text-red-500 -mt-1">El abono no puede ser mayor al precio total.</p>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelClass}>Adultos <span className="text-zinc-400">· opcional</span></label>
+              <input type="number" min="0" inputMode="numeric" value={form.adults} onChange={set("adults")} placeholder="0" className={inputClass} />
+            </div>
+            <div>
+              <label className={labelClass}>Niños <span className="text-zinc-400">· opcional</span></label>
+              <input type="number" min="0" inputMode="numeric" value={form.children} onChange={set("children")} placeholder="0" className={inputClass} />
             </div>
           </div>
 
@@ -555,7 +575,7 @@ function ReservationModal({ mode, reservation, defaultDate, defaultCabin, onSave
             <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100 transition">
               Cancelar
             </button>
-            <button onClick={handleSave} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium transition">
+            <button onClick={handleSave} disabled={abonoExceedsTotal} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium transition disabled:opacity-40 disabled:cursor-not-allowed">
               <Save size={13} /> Guardar
             </button>
           </div>
